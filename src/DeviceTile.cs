@@ -49,6 +49,7 @@ namespace CiscoReset
         {
             Device = device;
             this.step = step;
+            Text = device.Name;   // for screen readers and UI automation (the tile draws its own text)
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint |
                      ControlStyles.ResizeRedraw | ControlStyles.SupportsTransparentBackColor, true);
             Size = new Size(200, 196);

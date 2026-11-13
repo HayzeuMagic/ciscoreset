@@ -88,8 +88,8 @@ namespace CiscoReset
         {
             Text = "Cisco Reset  -  " + Environment.MachineName;
             Font = new Font("Segoe UI", 9f);
-            ClientSize = new Size(820, 760);
-            MinimumSize = new Size(720, 640);
+            ClientSize = new Size(720, 760);
+            MinimumSize = new Size(720, 600);
             StartPosition = FormStartPosition.CenterScreen;
             try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
             var bold = new Font(Font, FontStyle.Bold);
@@ -150,10 +150,26 @@ namespace CiscoReset
             Controls.Add(splitMain);
         }
 
+        bool splitterSet;
+
+        // Size the log once the window has its real size (not while it starts minimized).
+        void ApplySplitter()
+        {
+            if (splitterSet || WindowState == FormWindowState.Minimized || splitMain.Height < 300) return;
+            try { splitMain.SplitterDistance = Math.Max(420, splitMain.Height - 200); splitterSet = true; } catch { }
+        }
+
         protected override void OnLoad(EventArgs e)
         {
             base.OnLoad(e);
-            try { splitMain.SplitterDistance = Math.Max(420, splitMain.Height - 200); } catch { }
+            splitMain.FixedPanel = FixedPanel.Panel2;   // when the window grows, the devices get the space
+            ApplySplitter();
+        }
+
+        protected override void OnResize(EventArgs e)
+        {
+            base.OnResize(e);
+            if (splitMain != null) ApplySplitter();
         }
 
         protected override void OnShown(EventArgs e)
