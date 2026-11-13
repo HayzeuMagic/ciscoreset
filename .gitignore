@@ -1,0 +1,7 @@
+# Built on each PC with build.bat / test.bat
+CiscoReset.exe
+test/bin/
+
+# Per-PC files
+Logs/
+CiscoReset.settings.ini
