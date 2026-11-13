@@ -354,8 +354,10 @@ namespace CiscoReset
             sb.AppendLine();
             int i = 1;
             foreach (DeviceTile t in todo)
-                sb.AppendLine("   " + (i++) + ".  " + t.Device.Name.PadRight(10) + "  " + t.Device.Address(m) +
-                              (t.Device.Kind == DeviceKind.Switch ? "    write erase, delete vlan.dat, reload" : "    write erase, reload"));
+            {
+                sb.AppendLine("   " + (i++) + ".  " + t.Device.Name + "   " + t.Device.Address(m));
+                sb.AppendLine("         " + (t.Device.Kind == DeviceKind.Switch ? "write erase, delete vlan.dat, reload" : "write erase, reload"));
+            }
             sb.AppendLine();
             sb.AppendLine("The saved configuration is erased and the devices restart. This can't be undone.");
             sb.AppendLine();

@@ -192,7 +192,22 @@ namespace CiscoReset.Test
                 }
             }
             catch { }
-            finally { c.Close(); }
+            finally { HangUp(c); }
+        }
+
+        // Close politely: stop sending, read what the client still sends, then close.
+        // (Closing with unread data makes Windows send a reset, which can throw away our last message.)
+        static void HangUp(TcpClient c)
+        {
+            try
+            {
+                c.Client.Shutdown(SocketShutdown.Send);
+                c.Client.ReceiveTimeout = 1000;
+                var b = new byte[256];
+                while (c.Client.Receive(b) > 0) { }
+            }
+            catch { }
+            c.Close();
         }
     }
 }
