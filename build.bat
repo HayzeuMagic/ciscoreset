@@ -13,7 +13,7 @@ if not exist "%CSC%" (
 )
 
 "%CSC%" /nologo /target:winexe /optimize+ /platform:anycpu /out:CiscoReset.exe ^
-  /win32manifest:src\app.manifest ^
+  /win32manifest:src\app.manifest /win32icon:src\app.ico ^
   /r:System.dll /r:System.Core.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll ^
   src\*.cs
 if errorlevel 1 (
