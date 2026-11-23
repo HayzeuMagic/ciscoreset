@@ -15,9 +15,44 @@ namespace CiscoReset
         public string CucmIp = "10.{m}.100.8";
         public string TaasIp = "10.{m}.1.2";
         public string BabaIp = "10.{m}.1.4";
+        public string EdgeIp = "10.{m}.{m}.1";   // Cisco ISR 4321 edge router, e.g. 10.12.12.1 on PC 12
         public int PcNumber;              // 0 = use the number from the Wi-Fi IP
         public bool CheckName = true;     // refuse a device whose name ends in another PC's number
-        public bool TickCucm = true, TickTaas = true, TickBaba = true;
+        public bool TickCucm = true, TickTaas = true, TickBaba = true, TickEdge = true;
+
+        /// <summary>The address pattern for a device key (cucm, edge, taas, baba).</summary>
+        public string PatternFor(string key)
+        {
+            switch (key)
+            {
+                case "cucm": return CucmIp;
+                case "edge": return EdgeIp;
+                case "taas": return TaasIp;
+                default: return BabaIp;
+            }
+        }
+
+        public bool TickedFor(string key)
+        {
+            switch (key)
+            {
+                case "cucm": return TickCucm;
+                case "edge": return TickEdge;
+                case "taas": return TickTaas;
+                default: return TickBaba;
+            }
+        }
+
+        public void SetTicked(string key, bool on)
+        {
+            switch (key)
+            {
+                case "cucm": TickCucm = on; break;
+                case "edge": TickEdge = on; break;
+                case "taas": TickTaas = on; break;
+                default: TickBaba = on; break;
+            }
+        }
 
         public Credentials Credentials
         {
@@ -44,11 +79,13 @@ namespace CiscoReset
                         case "cucm": if (v.Length > 0) s.CucmIp = v; break;
                         case "coretaas": if (v.Length > 0) s.TaasIp = v; break;
                         case "corebaba": if (v.Length > 0) s.BabaIp = v; break;
+                        case "edge": if (v.Length > 0) s.EdgeIp = v; break;
                         case "pcnumber": s.PcNumber = int.TryParse(v, out n) && n > 0 && n < 255 ? n : 0; break;
                         case "checkname": s.CheckName = v != "0"; break;
                         case "tickcucm": s.TickCucm = v != "0"; break;
                         case "ticktaas": s.TickTaas = v != "0"; break;
                         case "tickbaba": s.TickBaba = v != "0"; break;
+                        case "tickedge": s.TickEdge = v != "0"; break;
                     }
                 }
             }
@@ -66,11 +103,13 @@ namespace CiscoReset
                 "Password=" + Password,
                 "EnablePassword=" + EnablePassword,
                 "CUCM=" + CucmIp,
+                "EDGE=" + EdgeIp,
                 "coreTAAS=" + TaasIp,
                 "coreBABA=" + BabaIp,
                 "PcNumber=" + (PcNumber > 0 ? PcNumber.ToString() : ""),
                 "CheckName=" + (CheckName ? "1" : "0"),
                 "TickCUCM=" + (TickCucm ? "1" : "0"),
+                "TickEDGE=" + (TickEdge ? "1" : "0"),
                 "TickTAAS=" + (TickTaas ? "1" : "0"),
                 "TickBABA=" + (TickBaba ? "1" : "0")
             };

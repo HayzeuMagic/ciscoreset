@@ -38,12 +38,14 @@ namespace CiscoReset
         }
 
         // ================================================================== devices
-        // The reset order matters: this PC reaches CUCM through coreBABA, so coreBABA goes last.
+        // The reset order matters: this PC reaches CUCM and the edge router through coreBABA,
+        // so the routers go first and coreBABA goes last.
         List<Device> MakeDevices()
         {
             return new List<Device>
             {
                 new Device { Key = "cucm", Name = "CUCM", Role = "Call manager (CME router)", Kind = DeviceKind.Router, Pattern = settings.CucmIp },
+                new Device { Key = "edge", Name = "EDGE", Role = "Edge router (Cisco ISR 4321, IOS-XE)", Kind = DeviceKind.Router, Pattern = settings.EdgeIp },
                 new Device { Key = "taas", Name = "coreTAAS", Role = "Backup core switch", Kind = DeviceKind.Switch, Pattern = settings.TaasIp },
                 new Device { Key = "baba", Name = "coreBABA", Role = "Main core switch", Kind = DeviceKind.Switch, Pattern = settings.BabaIp },
             };
@@ -88,7 +90,7 @@ namespace CiscoReset
         {
             Text = "Cisco Reset  -  " + Environment.MachineName;
             Font = new Font("Segoe UI", 9f);
-            ClientSize = new Size(720, 760);
+            ClientSize = new Size(940, 760);   // room for the four device tiles side by side
             MinimumSize = new Size(720, 600);
             StartPosition = FormStartPosition.CenterScreen;
             try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
@@ -110,7 +112,7 @@ namespace CiscoReset
             foreach (Device d in MakeDevices())
             {
                 var t = new DeviceTile(d, step++);
-                t.Ticked = d.Key == "cucm" ? settings.TickCucm : d.Key == "taas" ? settings.TickTaas : settings.TickBaba;
+                t.Ticked = settings.TickedFor(d.Key);
                 t.TickToggled += (s, e) => { var tile = (DeviceTile)s; tile.Ticked = !tile.Ticked; SaveTicks(); };
                 tiles.Add(t);
                 tilePanel.Controls.Add(t);
@@ -129,7 +131,7 @@ namespace CiscoReset
             btnStop.Enabled = false;
             var gReset = new GroupBox { Text = "3. Reset", Height = 96, Padding = new Padding(8, 4, 8, 4) };
             Stack(gReset, null, new Control[] {
-                Row(Lbl("Types:  write erase  >  delete vlan.dat (switches only)  >  reload  -  in order CUCM, coreTAAS, coreBABA.")),
+                Row(Lbl("Types:  write erase  >  delete vlan.dat (switches only)  >  reload  -  in order " + string.Join(", ", tiles.Select(x => x.Device.Name)) + ".")),
                 Row(btnReset, btnStop) }, null);
 
             // ---- status
@@ -278,12 +280,7 @@ namespace CiscoReset
 
         void SaveTicks()
         {
-            foreach (DeviceTile t in tiles)
-            {
-                if (t.Device.Key == "cucm") settings.TickCucm = t.Ticked;
-                else if (t.Device.Key == "taas") settings.TickTaas = t.Ticked;
-                else settings.TickBaba = t.Ticked;
-            }
+            foreach (DeviceTile t in tiles) settings.SetTicked(t.Device.Key, t.Ticked);
             settings.Save(Paths.SettingsFile);
         }
 
@@ -294,11 +291,10 @@ namespace CiscoReset
                 if (f.ShowDialog(this) != DialogResult.OK) return;
             }
             settings.Save(Paths.SettingsFile);
-            foreach (DeviceTile t in tiles)
-                t.Device.Pattern = t.Device.Key == "cucm" ? settings.CucmIp : t.Device.Key == "taas" ? settings.TaasIp : settings.BabaIp;
+            foreach (DeviceTile t in tiles) t.Device.Pattern = settings.PatternFor(t.Device.Key);
             UpdateAddresses();
-            Logger.Write("Settings saved. Login user '" + settings.Username + "'. Addresses: CUCM " + settings.CucmIp +
-                         ", coreTAAS " + settings.TaasIp + ", coreBABA " + settings.BabaIp + ".");
+            Logger.Write("Settings saved. Login user '" + settings.Username + "'. Addresses: " +
+                         string.Join(", ", tiles.Select(t => t.Device.Name + " " + t.Device.Pattern)) + ".");
         }
 
         // ================================================================== busy state
@@ -341,8 +337,11 @@ namespace CiscoReset
             progress.Value = 0;
             int ok2 = results.Count(r => r);
             lblStatus.Text = ok2 + " of " + results.Length + " devices reachable.";
-            if (ok2 < results.Length && !results[0] && results[2])
-                Logger.Write("Tip: if CUCM is not reachable but coreBABA is, this PC may be missing its route (route add 10.0.0.0 mask 255.0.0.0 10." + m + ".1.4) or CUCM its default route.");
+            var reach = new Dictionary<string, bool>();
+            for (int k = 0; k < tiles.Count; k++) reach[tiles[k].Device.Key] = results[k];
+            if (reach["baba"] && (!reach["cucm"] || !reach["edge"]))
+                Logger.Write("Tip: if CUCM or EDGE is not reachable but coreBABA is, this PC may be missing its route (route add 10.0.0.0 mask 255.0.0.0 10." + m + ".1.4), " +
+                             "the router its route back to this PC, or (EDGE) 'transport input telnet' on its vty lines.");
             SetBusy(false);
         }
 

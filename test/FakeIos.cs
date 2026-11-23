@@ -19,6 +19,7 @@ namespace CiscoReset.Test
         public string Username = "admin", Password = "pass", Enable = "pass";
         public bool HasVlanDat = true;
         public bool CrNulOnly;           // nothing special; kept for symmetry
+        public bool IosXe;               // ISR 4321: IOS-XE banner, slow graceful shutdown on reload
 
         // what happened
         public volatile bool Erased, VlanDeleted, Reloaded, Saved;
@@ -90,6 +91,7 @@ namespace CiscoReset.Test
             {
                 // IAC WILL ECHO, IAC WILL SGA, IAC DO TTYPE, IAC DO NAWS - like IOS
                 conn.S.Write(new byte[] { 255, 251, 1, 255, 251, 3, 255, 253, 24, 255, 253, 31 }, 0, 12);
+                if (IosXe) conn.Write("\r\n\r\n*** EDGE router - authorised access only ***\r\n");
                 conn.Write("\r\n\r\nUser Access Verification\r\n\r\n");
                 if (NoVtyPassword) { conn.Write("Password required, but none set\r\n"); return; }
 
@@ -185,7 +187,14 @@ namespace CiscoReset.Test
                         string b = conn.ReadLine();
                         if (b.Length > 0) continue;
                         Reloaded = true;
-                        conn.Write("\r\n\r\n*Mar  1 00:10:00: %SYS-5-RELOAD: Reload requested\r\n");
+                        if (IosXe)
+                        {
+                            // IOS-XE prints its reload reason and takes a while to drop the session
+                            conn.Write("\r\nReload Reason: Reload Command.\r\n");
+                            Thread.Sleep(1500);
+                            conn.Write("*Nov 23 10:00:00.123: %SYS-5-RELOAD: Reload requested by admin on vty0. Reload Reason: Reload Command.\r\n");
+                        }
+                        else conn.Write("\r\n\r\n*Mar  1 00:10:00: %SYS-5-RELOAD: Reload requested\r\n");
                         return;
                     }
                     else conn.Write("% Invalid input detected at '^' marker.\r\n");

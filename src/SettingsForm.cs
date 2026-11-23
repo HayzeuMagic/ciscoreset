@@ -9,7 +9,7 @@ namespace CiscoReset
     public class SettingsForm : Form
     {
         readonly AppSettings s;
-        readonly TextBox txtUser, txtPass, txtEnable, txtCucm, txtTaas, txtBaba;
+        readonly TextBox txtUser, txtPass, txtEnable, txtCucm, txtEdge, txtTaas, txtBaba;
         readonly CheckBox chkShow, chkName;
 
         public SettingsForm(AppSettings settings)
@@ -41,8 +41,9 @@ namespace CiscoReset
 
             Header(t, "Device addresses   ({m} = PC number, e.g. 10.{m}.1.4 = 10.12.1.4 on PC 12)");
             txtCucm = Field(t, "CUCM (step 1):", s.CucmIp, false);
-            txtTaas = Field(t, "coreTAAS (step 2):", s.TaasIp, false);
-            txtBaba = Field(t, "coreBABA (step 3):", s.BabaIp, false);
+            txtEdge = Field(t, "EDGE 4321 (step 2):", s.EdgeIp, false);
+            txtTaas = Field(t, "coreTAAS (step 3):", s.TaasIp, false);
+            txtBaba = Field(t, "coreBABA (step 4):", s.BabaIp, false);
             Note(t, "Telnet port 23 is used. Add :port at the end to use another port.");
 
             Header(t, "Safety");
@@ -61,7 +62,7 @@ namespace CiscoReset
             {
                 var d = new AppSettings();
                 txtUser.Text = d.Username; txtPass.Text = d.Password; txtEnable.Text = d.EnablePassword;
-                txtCucm.Text = d.CucmIp; txtTaas.Text = d.TaasIp; txtBaba.Text = d.BabaIp;
+                txtCucm.Text = d.CucmIp; txtEdge.Text = d.EdgeIp; txtTaas.Text = d.TaasIp; txtBaba.Text = d.BabaIp;
                 chkName.Checked = d.CheckName;
             };
             var buttons = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.RightToLeft, Dock = DockStyle.Fill, Margin = new Padding(0, 10, 0, 0) };
@@ -100,7 +101,7 @@ namespace CiscoReset
         {
             if (DialogResult == DialogResult.OK)
             {
-                foreach (TextBox tb in new[] { txtCucm, txtTaas, txtBaba })
+                foreach (TextBox tb in new[] { txtCucm, txtEdge, txtTaas, txtBaba })
                 {
                     if (tb.Text.Trim().Length == 0)
                     {
@@ -114,6 +115,7 @@ namespace CiscoReset
                 s.Password = txtPass.Text;
                 s.EnablePassword = txtEnable.Text;
                 s.CucmIp = txtCucm.Text.Trim();
+                s.EdgeIp = txtEdge.Text.Trim();
                 s.TaasIp = txtTaas.Text.Trim();
                 s.BabaIp = txtBaba.Text.Trim();
                 s.CheckName = chkName.Checked;

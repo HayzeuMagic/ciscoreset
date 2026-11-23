@@ -201,6 +201,13 @@ namespace CiscoReset
                     float pw = 8, gap = (r.Width - n * pw) / (n + 1);
                     for (int i = 0; i < n; i++) g.FillRectangle(b, r.X + gap + i * (pw + gap), r.Y + 2, pw, 6);
                 }
+                else if (Device.Key == "edge")
+                {
+                    // edge router (ISR 4321): two GE ports and two NIM slots
+                    for (int i = 0; i < 2; i++) g.FillRectangle(b, r.X + 6 + i * 14, r.Y + 2, 9, 6);
+                    using (var p = new Pen(Color.FromArgb(150, 160, 172), 1.5f))
+                        for (int i = 0; i < 2; i++) g.DrawRectangle(p, r.Right - 70 + i * 34, r.Y + 1, 28, 8);
+                }
                 else
                 {
                     // router: a few ports and a phone handset (CallManager Express)

@@ -60,6 +60,25 @@ namespace CiscoReset.Test
                 f.Stop();
             }
 
+            // 3b. EDGE router (Cisco ISR 4321, IOS-XE) at 10.m.m.1: login local, no vlan.dat
+            {
+                var f = new FakeIos { Hostname = "EDGE-12", IsSwitch = false, IosXe = true, LocalLogin = true }.Start();
+                var log = new List<string>();
+                ResetResult r = Reset(f, DeviceKind.Router, 12, null, true, log);
+                Check("EDGE 4321: ok", r.Ok && f.Erased && f.Reloaded && !f.Saved, r.Message);
+                Check("EDGE 4321: vlan.dat not touched", !f.Commands.Contains("delete vlan.dat"), string.Join(" / ", f.Commands));
+                Check("EDGE 4321: hostname read", r.Hostname == "EDGE-12", r.Hostname);
+                f.Stop();
+            }
+
+            // 3c. another PC's EDGE router: refused
+            {
+                var f = new FakeIos { Hostname = "EDGE-21", IsSwitch = false, IosXe = true }.Start();
+                ResetResult r = Reset(f, DeviceKind.Router, 12, null, true, new List<string>());
+                Check("EDGE of another PC: refused", !r.Ok && r.Message.Contains("PC 21") && !f.Erased, r.Message);
+                f.Stop();
+            }
+
             // 4. vlan.dat already gone: still fine
             {
                 var f = new FakeIos { Hostname = "COREbaba-12", HasVlanDat = false }.Start();
@@ -128,11 +147,28 @@ namespace CiscoReset.Test
             {
                 var d = new Device { Pattern = "10.{m}.100.8" };
                 Check("pattern 10.{m}.100.8 -> 10.12.100.8", d.Address(12) == "10.12.100.8", d.Address(12));
+                var e = new Device { Pattern = new AppSettings().EdgeIp };
+                Check("EDGE default 10.{m}.{m}.1 -> 10.12.12.1", e.Address(12) == "10.12.12.1", e.Address(12));
+                Check("EDGE default on PC 7 -> 10.7.7.1", e.Address(7) == "10.7.7.1", e.Address(7));
                 string h; int p;
                 Device.SplitHostPort("10.12.1.4", out h, out p);
                 Check("default port 23", h == "10.12.1.4" && p == 23, h + ":" + p);
                 Device.SplitHostPort("127.0.0.1:2304", out h, out p);
                 Check("host:port", h == "127.0.0.1" && p == 2304, h + ":" + p);
+            }
+
+            // 13. settings: an old settings file (no EDGE lines) still gets the EDGE default, and EDGE is saved
+            {
+                string file = System.IO.Path.GetTempFileName();
+                System.IO.File.WriteAllLines(file, new[] { "CUCM=10.{m}.100.8", "coreTAAS=10.{m}.1.2", "coreBABA=10.{m}.1.4", "TickBABA=0" });
+                AppSettings s = AppSettings.Load(file);
+                Check("old settings: EDGE default + ticked", s.EdgeIp == "10.{m}.{m}.1" && s.TickedFor("edge") && !s.TickedFor("baba"), s.EdgeIp);
+                s.EdgeIp = "10.{m}.{m}.254";
+                s.SetTicked("edge", false);
+                s.Save(file);
+                AppSettings s2 = AppSettings.Load(file);
+                Check("settings: EDGE address and tick saved", s2.PatternFor("edge") == "10.{m}.{m}.254" && !s2.TickEdge && s2.PatternFor("cucm") == "10.{m}.100.8", s2.EdgeIp);
+                System.IO.File.Delete(file);
             }
 
             Console.WriteLine();

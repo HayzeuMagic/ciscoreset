@@ -14,7 +14,7 @@ if not exist "%CSC%" (
 if not exist test\bin mkdir test\bin
 "%CSC%" /nologo /target:exe /optimize+ /out:test\bin\CiscoResetTests.exe ^
   /r:System.dll /r:System.Core.dll ^
-  test\*.cs src\Telnet.cs src\Resetter.cs src\Device.cs
+  test\*.cs src\Telnet.cs src\Resetter.cs src\Device.cs src\AppSettings.cs
 if errorlevel 1 (
   echo.
   echo TEST BUILD FAILED - see the messages above.

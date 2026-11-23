@@ -11,15 +11,16 @@ delete vlan.dat
 reload
 ```
 
-It works on the three devices that belong to the PC it runs on:
+It works on the four devices that belong to the PC it runs on:
 
 | Step | Device | Address | What it is |
 |---|---|---|---|
 | 1 | **CUCM** | `10.m.100.8` | Call manager (CallManager Express on a Cisco router) |
-| 2 | **coreTAAS** | `10.m.1.2` | Backup core switch |
-| 3 | **coreBABA** | `10.m.1.4` | Main core switch |
+| 2 | **EDGE** | `10.m.m.1` | Edge router (Cisco ISR 4321, IOS-XE) |
+| 3 | **coreTAAS** | `10.m.1.2` | Backup core switch |
+| 4 | **coreBABA** | `10.m.1.4` | Main core switch |
 
-**`m` is the PC number**: the last 2 digits of the PC's Wi-Fi IP address. On a PC with Wi-Fi IP `10.3.3.112`, `m` is `12`, so the app resets `10.12.100.8`, `10.12.1.2` and `10.12.1.4`. The app works this out by itself.
+**`m` is the PC number**: the last 2 digits of the PC's Wi-Fi IP address. On a PC with Wi-Fi IP `10.3.3.112`, `m` is `12`, so the app resets `10.12.100.8`, `10.12.12.1`, `10.12.1.2` and `10.12.1.4`. The app works this out by itself. The edge router's address uses the PC number twice (`10.m.m.1`).
 
 You don't need SecureCRT to use it. SecureCRT only keeps shortcuts to the devices; the configuration lives on the devices themselves, and Cisco Reset talks to them over Telnet directly. Your SecureCRT sessions are left as they are.
 
@@ -90,7 +91,7 @@ Cisco Reset does **not** need administrator rights. It keeps its settings and lo
 
 Cisco Reset reaches the devices over **Telnet**, so they need what the lab's *Basic Layer 3 configuration* task already sets up:
 
-- an IP address: coreTAAS `10.m.1.2` and coreBABA `10.m.1.4` on VLAN 1, CUCM `10.m.100.8`
+- an IP address: coreTAAS `10.m.1.2` and coreBABA `10.m.1.4` on VLAN 1, CUCM `10.m.100.8`, EDGE `10.m.m.1`
 - a `vty` password (`line vty 0 14`, `password pass`, `login`) or `login local` with `username admin privilege 15 secret pass`
 - an enable secret (`enable secret pass`)
 
@@ -100,6 +101,21 @@ Cisco Reset reaches the devices over **Telnet**, so they need what the lab's *Ba
 - on CUCM: `ip route 0.0.0.0 0.0.0.0 10.m.100.4`
 
 If they aren't, the two switches are still reset; only CUCM shows as not reachable.
+
+**For EDGE (the ISR 4321)**, the PC reaches `10.m.m.1` through coreBABA too (the same `route add` covers it), and the router needs:
+
+- a route back to the PC's network (for example a default route towards coreBABA)
+- Telnet allowed on its vty lines. Newer IOS-XE versions only allow SSH by default, so add:
+  ```
+  line vty 0 4
+   transport input telnet ssh
+   password pass
+   login
+  ```
+  (or `login local` with `username admin privilege 15 secret pass`)
+- `enable secret pass`
+
+The ISR 4321 has no `vlan.dat`, so it gets `write erase` and `reload` only, like CUCM. It takes several minutes to restart.
 
 ---
 
@@ -116,7 +132,7 @@ Double-click **`CiscoReset.exe`**. The window has four parts. You work through t
 | # | Section | What it's for |
 |---|---|---|
 | **1** | **This PC** | The PC number, found from the Wi-Fi IP. **Settings...** is here too. |
-| **2** | **Cisco devices** | One tile per device (CUCM, coreTAAS, coreBABA) and **Test connection**. |
+| **2** | **Cisco devices** | One tile per device (CUCM, EDGE, coreTAAS, coreBABA) and **Test connection**. |
 | **3** | **Reset** | The **Reset ticked devices...** button, and **Stop**. |
 | **4** | **Status and log** | Overall progress, and everything that happened line by line. |
 
@@ -135,12 +151,12 @@ Double-click **`CiscoReset.exe`**. The window has four parts. You work through t
 
 ### Step 3: Tick the devices you want to reset
 
-All three devices are ticked. **Click a tile** to untick it or tick it again.
+All four devices are ticked. **Click a tile** to untick it or tick it again.
 
 ![coreTAAS unticked (faded), Tick all and Tick none](docs/images/02-tick-devices.png)
 
 1. Click a tile to untick it. Unticked tiles look **faded** (coreTAAS here) and are left alone.
-2. **Tick all** / **Tick none** tick or untick all three at once.
+2. **Tick all** / **Tick none** tick or untick all four at once.
 
 The ticks are remembered on this PC.
 
@@ -176,7 +192,7 @@ If one is gray, see [Troubleshooting](#troubleshooting). You can still reset the
 
 ![coreTAAS being reset: CUCM done, coreBABA waiting](docs/images/05-reset-progress.png)
 
-Cisco Reset works through the devices **one at a time, in order: CUCM, coreTAAS, coreBABA**. coreBABA goes last because this PC reaches CUCM *through* coreBABA.
+Cisco Reset works through the devices **one at a time, in order: CUCM, EDGE, coreTAAS, coreBABA**. coreBABA goes last because this PC reaches CUCM and EDGE *through* coreBABA.
 
 1. **The tiles:** the device being reset is **blue with moving stripes** and shows its % and current step. The ones still to come are light blue (*Waiting...*), and finished ones turn green.
 2. **The status bar** shows the overall progress and what is happening right now. The log below it shows each prompt from the device and each answer, with `(password sent)` in place of the password.
@@ -242,6 +258,7 @@ The settings are saved in `CiscoReset.settings.ini` next to `CiscoReset.exe`, **
 |---|---|
 | **PC number: Unknown** | The PC has no Wi-Fi IP. Type its number in section 1. |
 | **Can't reach 10.m.x.x** | The device is off, not cabled, or has no IP yet. Check with `ping 10.m.1.4`. |
+| **EDGE can't be reached, but coreBABA can** | Check the PC's route (as for CUCM), the 4321's route back to the PC, and that its vty lines allow Telnet (`transport input telnet ssh`). Or reset it with the console cable. |
 | **CUCM can't be reached, but the switches can** | Add the PC's route (`route add 10.0.0.0 mask 255.0.0.0 10.m.1.4` in an administrator Command Prompt; it's lost when the PC restarts) and check CUCM's default route (`ip route 0.0.0.0 0.0.0.0 10.m.100.4`). Or reset CUCM with the console cable. |
 | **Wrong Telnet password / Wrong enable password** | Someone changed it. Type the right one in **Settings...**, or reset that device with the console cable. |
 | **Wrong username or password** | The device uses `login local` with another user (for example `namemo`). Change **Username** in **Settings...**. |
@@ -280,7 +297,7 @@ The settings are saved in `CiscoReset.settings.ini` next to `CiscoReset.exe`, **
 
 ## Exactly what it types
 
-For each ticked device, in order CUCM, coreTAAS, coreBABA, Cisco Reset opens a Telnet connection and waits for each prompt before answering:
+For each ticked device, in order CUCM, EDGE, coreTAAS, coreBABA, Cisco Reset opens a Telnet connection and waits for each prompt before answering:
 
 | When the device shows | Cisco Reset sends |
 |---|---|
@@ -307,6 +324,6 @@ When the device drops the connection to restart, that device is done.
 
 ## Testing without real devices
 
-`test.bat` builds and runs automatic tests against **pretend** Cisco devices (`test\FakeIos.cs`), so no switch is needed. They check a normal reset of a switch and of the CUCM router, `login local`, a missing `vlan.dat`, wrong passwords and usernames, another PC's device, a device without a `vty` password, and an unreachable device. Double-click `test.bat`; it should end with **`23 passed, 0 failed.`**
+`test.bat` builds and runs automatic tests against **pretend** Cisco devices (`test\FakeIos.cs`), so no switch is needed. They check a normal reset of a switch, of the CUCM router and of the ISR 4321 edge router (IOS-XE), `login local`, a missing `vlan.dat`, wrong passwords and usernames, another PC's device, a device without a `vty` password, and an unreachable device. Double-click `test.bat`; it should end with **`31 passed, 0 failed.`**
 
 The pretend devices only copy the prompts of real ones. Before using Cisco Reset in class, try it once on a real lab PC: run **Test connection**, reset one device (for example coreTAAS, the backup switch), and check it on the console cable.
