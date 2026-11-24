@@ -11,6 +11,8 @@ delete vlan.dat
 reload
 ```
 
+It can also **save** the devices' configuration instead: **Save config (wr)...** logs in the same way and types `wr`, so the running configuration is kept after a restart. See [Save the configuration (wr)](#save-the-configuration-wr).
+
 It works on the four devices that belong to the PC it runs on:
 
 | Step | Device | Address | What it is |
@@ -33,6 +35,7 @@ You don't need SecureCRT to use it. SecureCRT only keeps shortcuts to the device
 - [Part 1: Build Cisco Reset (once)](#part-1-build-cisco-reset-once)
 - [Part 2: Prepare the lab PCs and devices (once)](#part-2-prepare-the-lab-pcs-and-devices-once)
 - [Part 3: How to use Cisco Reset, step by step](#part-3-how-to-use-cisco-reset-step-by-step)
+- [Save the configuration (wr)](#save-the-configuration-wr)
 - [What the tile colours mean](#what-the-tile-colours-mean)
 - [Troubleshooting](#troubleshooting)
 - [Safety rules (built in)](#safety-rules-built-in)
@@ -133,7 +136,7 @@ Double-click **`CiscoReset.exe`**. The window has four parts. You work through t
 |---|---|---|
 | **1** | **This PC** | The PC number, found from the Wi-Fi IP. **Settings...** is here too. |
 | **2** | **Cisco devices** | One tile per device (CUCM, EDGE, coreTAAS, coreBABA) and **Test connection**. |
-| **3** | **Reset** | The **Reset ticked devices...** button, and **Stop**. |
+| **3** | **Reset or save** | The **Reset ticked devices...** button, the **Save config (wr)...** button, and **Stop**. |
 | **4** | **Status and log** | Overall progress, and everything that happened line by line. |
 
 ---
@@ -238,6 +241,27 @@ The settings are saved in `CiscoReset.settings.ini` next to `CiscoReset.exe`, **
 
 ---
 
+## Save the configuration (wr)
+
+Use this when you want to **keep** what's on the devices, for example after setting them up, so it's still there after a restart. It doesn't erase or reload anything.
+
+1. Tick the devices to save (section 2), the same way as for a reset.
+2. In **section 3**, click **Save config (wr)...**.
+3. A **Confirm save** window lists each device and its address. Click **Yes**.
+4. Each device goes **blue** while it's being saved and **green ✓** with *Configuration saved [OK]* when the device has confirmed it.
+
+It uses the same login, PC-number check and name check as a reset. If something goes wrong, the tile turns red and says *Nothing was saved*.
+
+What it types on each device:
+
+| When the device shows | Cisco Reset sends |
+|---|---|
+| `Username:` / `Password:` / `>` | the same login as a reset (see [Exactly what it types](#exactly-what-it-types)) |
+| `COREbaba-12#` | `wr` |
+| `Building configuration... [OK]` then `COREbaba-12#` | `exit` |
+
+---
+
 ## What the tile colours mean
 
 | Tile | Meaning |
@@ -273,7 +297,7 @@ The settings are saved in `CiscoReset.settings.ini` next to `CiscoReset.exe`, **
 ## Safety rules (built in)
 
 - **Nothing is erased until the login works.** A wrong password, a missing device or a timeout stops before `write erase`, and the message says *Nothing was erased*.
-- **It never saves.** When `reload` asks *Save? [yes/no]*, it always answers **no**.
+- **A reset never saves.** When `reload` asks *Save? [yes/no]*, it always answers **no**. Only the separate **Save config (wr)...** button types `wr`.
 - **It checks the device's name.** If the hostname ends in a different PC number (for example `COREbaba-21` when this is PC 12), it refuses to reset it. Default names like `Switch` are fine. You can turn this off in **Settings...**.
 - **It always asks first.** The confirm window lists every device and address.
 - **Passwords are never written to the log.** The log shows `(password sent)`.
@@ -324,6 +348,6 @@ When the device drops the connection to restart, that device is done.
 
 ## Testing without real devices
 
-`test.bat` builds and runs automatic tests against **pretend** Cisco devices (`test\FakeIos.cs`), so no switch is needed. They check a normal reset of a switch, of the CUCM router and of the ISR 4321 edge router (IOS-XE), `login local`, a missing `vlan.dat`, wrong passwords and usernames, another PC's device, a device without a `vty` password, and an unreachable device. Double-click `test.bat`; it should end with **`31 passed, 0 failed.`**
+`test.bat` builds and runs automatic tests against **pretend** Cisco devices (`test\FakeIos.cs`), so no switch is needed. They check a normal reset of a switch, of the CUCM router and of the ISR 4321 edge router (IOS-XE), `login local`, a missing `vlan.dat`, wrong passwords and usernames, another PC's device, a device without a `vty` password, an unreachable device, and saving the configuration with `wr` (on a switch and on the ISR 4321, and refusing another PC's device). Double-click `test.bat`; it should end with **`37 passed, 0 failed.`**
 
 The pretend devices only copy the prompts of real ones. Before using Cisco Reset in class, try it once on a real lab PC: run **Test connection**, reset one device (for example coreTAAS, the backup switch), and check it on the console cable.

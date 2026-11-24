@@ -129,10 +129,13 @@ namespace CiscoReset
             btnReset.ForeColor = Color.DarkRed;
             btnStop = Btn("Stop", (s, e) => { if (cts != null) { cts.Cancel(); lblStatus.Text = "Stopping..."; } }, false);
             btnStop.Enabled = false;
-            var gReset = new GroupBox { Text = "3. Reset", Height = 96, Padding = new Padding(8, 4, 8, 4) };
+            var btnSave = Btn("Save config (wr)...", Save_Click);
+            btnSave.ForeColor = Color.DarkGreen;
+            var gReset = new GroupBox { Text = "3. Reset or save", Height = 118, Padding = new Padding(8, 4, 8, 4) };
             Stack(gReset, null, new Control[] {
-                Row(Lbl("Types:  write erase  >  delete vlan.dat (switches only)  >  reload  -  in order " + string.Join(", ", tiles.Select(x => x.Device.Name)) + ".")),
-                Row(btnReset, btnStop) }, null);
+                Row(Lbl("Reset types:  write erase  >  delete vlan.dat (switches only)  >  reload  -  in order " + string.Join(", ", tiles.Select(x => x.Device.Name)) + ".")),
+                Row(Lbl("Save types:  wr  (saves the running configuration, nothing is erased or reloaded).")),
+                Row(btnReset, btnSave, btnStop) }, null);
 
             // ---- status
             progress = new ProgressBar { Height = 16 };
@@ -380,6 +383,41 @@ namespace CiscoReset
             if (MessageBox.Show(this, sb.ToString(), "Confirm reset", MessageBoxButtons.YesNo, MessageBoxIcon.Warning,
                                 MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
 
+            await RunOnTicked(m, todo, "Reset", "reset", Resetter.Run);
+        }
+
+        // ================================================================== save (wr)
+        async void Save_Click(object sender, EventArgs e)
+        {
+            int m = CurrentPc();
+            if (m <= 0) { AskForPcNumber(); return; }
+            List<DeviceTile> todo = tiles.Where(t => t.Ticked).ToList();
+            if (todo.Count == 0)
+            {
+                MessageBox.Show(this, "Tick at least one device first.", "Cisco Reset", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            var sb = new StringBuilder();
+            sb.AppendLine("Save the configuration (wr) on these devices for PC " + m + "?");
+            sb.AppendLine();
+            int i = 1;
+            foreach (DeviceTile t in todo)
+                sb.AppendLine("   " + (i++) + ".  " + t.Device.Name + "   " + t.Device.Address(m));
+            sb.AppendLine();
+            sb.AppendLine("The running configuration replaces the saved one, so it is still there after a restart.");
+            if (MessageBox.Show(this, sb.ToString(), "Confirm save", MessageBoxButtons.YesNo, MessageBoxIcon.Question,
+                                MessageBoxDefaultButton.Button1) != DialogResult.Yes) return;
+
+            await RunOnTicked(m, todo, "Save (wr)", "saved", Resetter.SaveConfig);
+        }
+
+        delegate ResetResult DeviceJob(Device dev, string address, int pcNumber, Credentials cred, bool checkName,
+                                       Action<int, string> progress, Action<string> log, CancellationToken ct);
+
+        /// <summary>Runs one job (reset or save) on the ticked devices, one after another, updating the tiles.</summary>
+        async Task RunOnTicked(int m, List<DeviceTile> todo, string title, string doneWord, DeviceJob job)
+        {
             cts = new CancellationTokenSource();
             CancellationToken ct = cts.Token;
             SetBusy(true);
@@ -387,7 +425,7 @@ namespace CiscoReset
             foreach (DeviceTile t in tiles) t.SetState(t.Ticked ? TileState.Waiting : TileState.Idle, 0, t.Ticked ? "Waiting..." : "Not ticked");
             Credentials cred = settings.Credentials;
             bool checkName = settings.CheckName;
-            Logger.Write("==== Reset for PC " + m + ": " + string.Join(", ", todo.Select(t => t.Device.Name + " " + t.Device.Address(m))));
+            Logger.Write("==== " + title + " for PC " + m + ": " + string.Join(", ", todo.Select(t => t.Device.Name + " " + t.Device.Address(m))));
 
             int okCount = 0, failCount = 0;
             await Task.Run(() =>
@@ -399,12 +437,12 @@ namespace CiscoReset
                     string address = t.Device.Address(m);
                     if (ct.IsCancellationRequested)
                     {
-                        Ui(() => t.SetState(TileState.Skipped, 100, "Stopped. Nothing was erased."));
+                        Ui(() => t.SetState(TileState.Skipped, 100, "Stopped. Nothing was done."));
                         continue;
                     }
                     Logger.Write("---- " + t.Device.Name + " " + address);
-                    Ui(() => { t.SetState(TileState.Working, 0, "Connecting..."); lblStatus.Text = "Resetting " + t.Device.Name + " (" + address + ")..."; });
-                    ResetResult r = Resetter.Run(t.Device, address, m, cred, checkName,
+                    Ui(() => { t.SetState(TileState.Working, 0, "Connecting..."); lblStatus.Text = title + ": " + t.Device.Name + " (" + address + ")..."; });
+                    ResetResult r = job(t.Device, address, m, cred, checkName,
                         (pct, text) => Ui(() =>
                         {
                             t.SetState(TileState.Working, pct, text);
@@ -420,7 +458,7 @@ namespace CiscoReset
 
             progress.Value = 100;
             string summary = ct.IsCancellationRequested ? "Stopped. " : "Finished. ";
-            summary += okCount + " reset" + (failCount > 0 ? ", " + failCount + " with a problem - see the red tiles and the log." : ".");
+            summary += okCount + " " + doneWord + (failCount > 0 ? ", " + failCount + " with a problem - see the red tiles and the log." : ".");
             lblStatus.Text = summary;
             Logger.Write("==== " + summary);
             cts = null;

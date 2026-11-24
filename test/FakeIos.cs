@@ -1,6 +1,6 @@
 // Cisco Reset - a pretend Cisco IOS device for testing (no real switch needed).
 // It answers Telnet like a Catalyst switch or a CME router: login, enable, write erase,
-// delete vlan.dat, reload. C# 5 / .NET Framework 4.5+ compatible.
+// delete vlan.dat, reload, wr. C# 5 / .NET Framework 4.5+ compatible.
 using System;
 using System.Collections.Generic;
 using System.Net;
@@ -22,7 +22,7 @@ namespace CiscoReset.Test
         public bool IosXe;               // ISR 4321: IOS-XE banner, slow graceful shutdown on reload
 
         // what happened
-        public volatile bool Erased, VlanDeleted, Reloaded, Saved;
+        public volatile bool Erased, VlanDeleted, Reloaded, Saved, WroteMemory;
         public readonly List<string> Commands = new List<string>();
 
         public int Port { get; private set; }
@@ -163,6 +163,13 @@ namespace CiscoReset.Test
                         Erased = true;
                         modified = true;
                     }
+                    else if (cmd == "wr" || cmd == "write" || cmd == "write memory" || cmd == "copy running-config startup-config")
+                    {
+                        conn.Write("Building configuration...\r\n[OK]\r\n");
+                        WroteMemory = true;
+                        modified = false;
+                    }
+                    else if (cmd == "exit") return;
                     else if (cmd == "delete vlan.dat")
                     {
                         conn.Write("Delete filename [vlan.dat]? ");

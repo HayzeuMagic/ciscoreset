@@ -1,6 +1,7 @@
 // Cisco Reset - logs in to one device over Telnet and types:
 //   enable, write erase, delete vlan.dat (switches only), reload
 // waiting for the right prompt before every answer.
+// SaveConfig logs in the same way and types "wr" (write memory) instead.
 // C# 5 / .NET Framework 4.5+ compatible.
 using System;
 using System.Text;
@@ -132,6 +133,77 @@ namespace CiscoReset
             {
                 lines.Flush();
                 r.Message = "Error: " + ex.Message + (erased ? " (The configuration was already erased.)" : "");
+            }
+            return r;
+        }
+
+        /// <summary>
+        /// Saves the running configuration of one device: logs in and types "wr" (write memory).
+        /// Nothing is erased or reloaded. Same progress/log/name-check rules as Run.
+        /// </summary>
+        public static ResetResult SaveConfig(Device dev, string address, int pcNumber, Credentials cred, bool checkName,
+                                             Action<int, string> progress, Action<string> log, CancellationToken ct)
+        {
+            var r = new ResetResult();
+            string host;
+            int port;
+            Device.SplitHostPort(address, out host, out port);
+            var lines = new LineLog(log);
+            try
+            {
+                progress(5, "Connecting...");
+                TelnetSession t;
+                try { t = TelnetSession.Connect(host, port, 4000, ct); }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception)
+                {
+                    throw new ResetFailed("Can't reach " + address + " (Telnet). Is it on and set up? Nothing was saved.");
+                }
+                using (t)
+                using (ct.Register(t.Dispose))
+                {
+                    t.Received += lines.Add;
+
+                    progress(20, "Logging in...");
+                    r.Hostname = Login(t, cred, lines, ct);
+                    progress(50, "Logged in to " + r.Hostname);
+
+                    if (checkName)
+                    {
+                        Match m = Regex.Match(r.Hostname, @"(\d{1,2})$");
+                        int n;
+                        if (m.Success && int.TryParse(m.Groups[1].Value, out n) && n != pcNumber)
+                            throw new ResetFailed(r.Hostname + " looks like PC " + n + "'s device, not PC " + pcNumber +
+                                                  "'s. Nothing was saved. Check the PC number.");
+                    }
+
+                    progress(70, "Saving the configuration (wr)...");
+                    string outText = Command(t, "wr", lines, ct);
+                    if (Regex.IsMatch(outText, @"%\s*(error|invalid|incomplete|ambiguous)", O))
+                        throw new ResetFailed("wr failed: " + FirstErrorLine(outText));
+                    t.Send("exit");
+                    lines.Flush();
+
+                    r.Ok = true;
+                    r.Message = Regex.IsMatch(outText, @"\[OK\]", O) ? "Configuration saved [OK]" : "Configuration saved";
+                    progress(100, r.Message);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                lines.Flush();
+                r.Message = "Stopped. Not saved.";
+            }
+            catch (ResetFailed ex)
+            {
+                lines.Flush();
+                // Login() says "Nothing was erased." - true, but here the point is nothing was saved.
+                r.Message = ex.Message.Replace("Nothing was erased.", "Nothing was saved.");
+            }
+            catch (Exception ex)
+            {
+                lines.Flush();
+                r.Message = "Error: " + ex.Message;
             }
             return r;
         }

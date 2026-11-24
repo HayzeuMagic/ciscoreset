@@ -23,6 +23,13 @@ namespace CiscoReset.Test
                                 (p, s) => { }, s => { lock (log) log.Add(s); }, CancellationToken.None);
         }
 
+        static ResetResult Save(FakeIos f, DeviceKind kind, int pc, Credentials cred, bool checkName, List<string> log)
+        {
+            var dev = new Device { Key = "x", Name = f.Hostname, Kind = kind, Pattern = "127.0.0.1:" + f.Port };
+            return Resetter.SaveConfig(dev, dev.Address(pc), pc, cred ?? new Credentials(), checkName,
+                                       (p, s) => { }, s => { lock (log) log.Add(s); }, CancellationToken.None);
+        }
+
         static int Main()
         {
             Console.WriteLine("Cisco Reset tests");
@@ -169,6 +176,37 @@ namespace CiscoReset.Test
                 AppSettings s2 = AppSettings.Load(file);
                 Check("settings: EDGE address and tick saved", s2.PatternFor("edge") == "10.{m}.{m}.254" && !s2.TickEdge && s2.PatternFor("cucm") == "10.{m}.100.8", s2.EdgeIp);
                 System.IO.File.Delete(file);
+            }
+
+            // 14. save config (wr) on a switch: wr typed, nothing erased or reloaded
+            {
+                var f = new FakeIos { Hostname = "COREbaba-12" }.Start();
+                var log = new List<string>();
+                ResetResult r = Save(f, DeviceKind.Switch, 12, null, true, log);
+                Check("save (wr): ok", r.Ok && r.Message.Contains("[OK]"), r.Message);
+                Check("save (wr): 'wr' typed", f.WroteMemory && f.Commands.Contains("wr"), string.Join(" / ", f.Commands));
+                Check("save (wr): nothing erased, deleted or reloaded", !f.Erased && !f.VlanDeleted && !f.Reloaded, string.Join(" / ", f.Commands));
+                f.Stop();
+            }
+
+            // 15. save config on the EDGE router (login local, IOS-XE)
+            {
+                var f = new FakeIos { Hostname = "EDGE-12", IsSwitch = false, IosXe = true, LocalLogin = true }.Start();
+                ResetResult r = Save(f, DeviceKind.Router, 12, null, true, new List<string>());
+                Check("save (wr) EDGE 4321: ok", r.Ok && f.WroteMemory && !f.Reloaded, r.Message);
+                f.Stop();
+            }
+
+            // 16. save config: another PC's device is refused, wrong password says nothing was saved
+            {
+                var f = new FakeIos { Hostname = "COREbaba-21" }.Start();
+                ResetResult r = Save(f, DeviceKind.Switch, 12, null, true, new List<string>());
+                Check("save (wr) other PC's device: refused", !r.Ok && r.Message.Contains("PC 21") && !f.WroteMemory, r.Message);
+                f.Stop();
+                var g = new FakeIos { Hostname = "COREbaba-12", Password = "changed" }.Start();
+                r = Save(g, DeviceKind.Switch, 12, null, true, new List<string>());
+                Check("save (wr) wrong password: 'Nothing was saved'", !r.Ok && r.Message.Contains("Nothing was saved") && !g.WroteMemory, r.Message);
+                g.Stop();
             }
 
             Console.WriteLine();
